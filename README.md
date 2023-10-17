@@ -43,7 +43,7 @@ Les données remontent dans home-assistant via esphome.
 
 #### Esphome :
 
-[yaml](Monitoring_Arrosage/blob/main/esp-vs-arrosage.yaml)
+[yaml](https://github.com/NicoDupont/Monitoring_Arrosage/blob/main/esp-vs-arrosage.yaml)
 
 #### Entités :
 
