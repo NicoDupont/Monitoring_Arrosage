@@ -1,0 +1,560 @@
+substitutions:
+  friendly_name: "Esp VS Arrosage"
+  friendly_name_wifiap: "Esp-VS-Arrosage-Hotspot"
+  interval_update_court: "5s"
+  interval_update_normal: "60s"
+  interval_update_long: "600s"
+  valve_duration: "5s"
+
+esphome:
+  name: esp-vs-arrosage
+  comment: esp32 30pin monitoring temperature + pression + débimetre + gestion des vannes motorisées de la partie arrosage dans le vide sanitaire
+
+esp32:
+  board: esp32dev
+
+# Enable logging
+logger:
+
+# Enable Home Assistant API
+api:
+#  encryption:
+#    key: "a/cf+0bYDB1PlbJG8EkZfm23KiwYMVkIwHGuOpQmEqk="
+
+ota:
+  password: "001e0cad2c29a727973ae716dd966c53"
+
+wifi:
+  networks:
+  - ssid: !secret wifi_maison_ssid
+    password: !secret wifi_maison_password
+  - ssid: !secret wifi_maison_2_ssid
+    password: !secret wifi_maison_2_password
+  reboot_timeout : 2min #reboot si pas de wifi actif
+
+  # Enable fallback hotspot (captive portal) in case wifi connection fails
+  ap:
+    ssid: "${friendly_name_wifiap}"
+    password: !secret wifi_esp_ap_password
+
+captive_portal:
+
+#--------------------------------------
+#esp32_ble_tracker:
+#bluetooth_proxy:
+
+#--------------------------------------
+web_server:
+  port: 80
+  version: 2
+
+# ds18b20 temperature eau
+dallas:
+  - update_interval : ${interval_update_normal}
+    pin: 19
+    id: dallas_a
+  
+#i2c ads1115 + pcf8575 + bme280
+i2c:
+  sda: 21
+  scl: 22
+  scan: True
+  id: bus_a
+
+#i2c pcf8575 i/o extender 16 gpio pour gérer les 2 cartes 4 relais (3 vannes motorisées et donc 1 vanne possible en plus )
+pcf8574:
+  - id: 'pcf8575_hub'
+    address: 0x20 #ou 0x21
+    pcf8575: True
+
+#i2c ads1115 pour lire les capteurs de pression 100psi 0.5=>4.5v
+ads1115:
+  - address: 0x48
+
+time:
+  - platform: homeassistant
+    timezone: "Europe/Paris"
+    id: ha_time
+
+#----------------------------------------------------------------------------------------------
+#----------------------------------------------------------------------------------------------
+#binary_sensor
+binary_sensor:
+
+# ETAT VANNE MOTORISEE  
+  - platform: gpio
+    pin:
+      number: 25
+      inverted: true
+    name: "${friendly_name} Vanne Canal Status"
+    id: EspVsArrosageVanneCanalStatus
+    device_class: opening
+
+  - platform: gpio
+    pin:
+      number: 26
+      inverted: true
+    name: "${friendly_name} Vanne Alim Cuve Status"
+    id: EspVsArrosageVanneAlimCuveStatus
+    device_class: opening
+
+  - platform: gpio
+    pin:
+      number: 27
+      inverted: true
+    name: "${friendly_name} Vanne Retour Cuve Status"
+    id: EspVsArrosageVanneRetourCuveStatus
+    device_class: opening
+
+# DIAGNOSTIQUE
+#--------------------------------------
+#boolean status of the esp32
+  - platform: status
+    name: "${friendly_name} Status"
+    id : EspVsArrosageStatus
+
+text_sensor:
+  - platform: template
+    name: "${friendly_name} Uptime"
+    id: uptime_human
+    icon: mdi:clock-start 
+#--------------------------------------
+#wifi   
+  - platform: wifi_info
+    ip_address:
+      name: "${friendly_name} Local IP"
+      id : EspVsArrosageLocalIp
+    ssid:
+      name: "${friendly_name} SSID"
+      id : EspVsArrosageSSID
+
+#----------------------------------------------------------------------------------------------
+#----------------------------------------------------------------------------------------------
+#bouton
+button:
+  - platform: restart
+    name: "${friendly_name} Restart"
+    id : EspVsArrosageRestart
+  - platform: shutdown
+    name: "${friendly_name} Shutdown"
+    id : EspVsArrosageShutdown
+  - platform: safe_mode
+    name: "${friendly_name} Safe Mode"
+    id : EspVsArrosageSafeMode
+
+
+#----------------------------------------------------------------------------------------------
+#----------------------------------------------------------------------------------------------
+#sensor
+sensor:
+
+#--------------------------------------
+#esp32 temp
+  - platform: internal_temperature
+    name: "${friendly_name} Internal Esp32 Temp"
+    id: EspVsArrosageInternalEsp32Temp
+    update_interval: ${interval_update_normal}
+
+#BME280
+#monitoring de la temperature de la box avec l'electronique / alim / relais
+  - platform: bme280
+    temperature:
+      name: "${friendly_name} Temperature Box"
+      id: EspVsArrosageTempBox
+      oversampling: 16x
+      accuracy_decimals: 1
+    pressure:
+      name: "${friendly_name} Pression Atmo Box"
+      id: EspVsArrosagePressionAtmoBox
+      oversampling: 16x
+      accuracy_decimals: 1
+    humidity:
+      name: "${friendly_name} Humidity Box"
+      id: EspVsArrosageHumiBox
+      accuracy_decimals: 1
+      oversampling: 16x
+    address: 0x77 #or 0x76/0x77
+    i2c_id: bus_a
+    update_interval: ${interval_update_normal}
+
+#monitoring de la temperature du vs
+  - platform: bme280
+    temperature:
+      name: "${friendly_name} Temperature Vs"
+      id: EspVsArrosageTempVs
+      oversampling: 16x
+      accuracy_decimals: 1
+    pressure:
+      name: "${friendly_name} Pression Atmo Vs"
+      id: EspVsArrosagePressionAtmoVs
+      oversampling: 16x
+      accuracy_decimals: 1
+    humidity:
+      name: "${friendly_name} Humidity Vs"
+      id: EspVsArrosageHumiVs
+      accuracy_decimals: 1
+      oversampling: 16x
+    address: 0x76 #or 0x76/0x77
+    i2c_id: bus_a
+    update_interval: ${interval_update_long}
+
+
+#DALLAS
+#monitoring de la temperature de l'eau du canal et de l'eau d'arrosage (adresse des sondes dallas a recupérer dans le log)
+  - platform: dallas
+    address: 0x8502079245a6df28
+    accuracy_decimals: 1
+    name: "${friendly_name} Temperature Eau Canal"
+    id: EspVsArrosageTempEauCanal
+    
+  - platform: dallas
+    address: 0xf60416a5b5fdff28
+    accuracy_decimals: 1
+    name: "${friendly_name} Temperature Eau Arrosage"
+    id: EspVsArrosageTempEauArrosage
+
+# PRESSION EAU
+# capteur de pression 0.5v=>4.5v 0=>100psi = 0=>6.9bar
+# gain : 6.144 pour la plage de tension (attention au vcc => voir doc ads1115) 
+  - platform: ads1115
+    multiplexer: 'A0_GND'
+    gain: 6.144 
+    name: "${friendly_name} A0 Voltage"
+    id: EspVsArrosageA0Voltage
+    device_class: voltage
+    unit_of_measurement: V
+    state_class: "measurement"
+    update_interval: ${interval_update_court}
+
+  - platform: ads1115
+    multiplexer: 'A1_GND'
+    gain: 6.144 
+    name: "${friendly_name} A1 Voltage"
+    id: EspVsArrosageA1Voltage
+    device_class: voltage
+    unit_of_measurement: V
+    state_class: "measurement"
+    update_interval: ${interval_update_court}
+
+  - platform: ads1115
+    multiplexer: 'A2_GND'
+    gain: 6.144 
+    name: "${friendly_name} A2 Voltage"
+    id: EspVsArrosageA2Voltage
+    device_class: voltage
+    unit_of_measurement: V
+    state_class: "measurement"
+    update_interval: ${interval_update_court}
+  
+#  - platform: ads1115
+#    multiplexer: 'A3_GND'
+#    gain: 6.144 
+#    name: "${friendly_name} A3 Voltage"
+#    id: EspVsArrosageA3Voltage
+#    device_class: voltage
+#    unit_of_measurement: V
+#    state_class: "measurement"
+#    update_interval: ${interval_update_court}
+
+
+  # pression eau canal avant filtre
+  - platform: ads1115
+    multiplexer: 'A1_GND'
+    gain: 6.144 
+    name: "${friendly_name} Pression Amont Canal"
+    id: "EspVsArrosagePressionAmontCanal"
+    device_class: pressure
+    state_class: "measurement"
+    icon: "mdi:gauge"
+    accuracy_decimals: 1
+    filters:
+      - calibrate_linear:
+            - 0.5 -> 0 
+            - 4.5 -> 6.9
+      - sliding_window_moving_average:
+          window_size: 5
+          send_every: 1
+      - lambda: if (x>6.9) { return 6.9; } else {if (x<0) {return 0;} else {return x;} }
+      
+
+    unit_of_measurement: bar
+    update_interval: ${interval_update_court}   
+
+  # pression eau canal apres filtre
+  - platform: ads1115
+    multiplexer: 'A0_GND'
+    gain: 6.144 
+    name: "${friendly_name} Pression Aval Canal"
+    id: "EspVsArrosagePressionAvalCanal"
+    device_class: pressure
+    state_class: "measurement"
+    icon: "mdi:gauge"
+    accuracy_decimals: 1
+    filters:
+      - calibrate_linear:
+            - 0.5 -> 0 
+            - 4.5 -> 6.9
+      - sliding_window_moving_average:
+          window_size: 5
+          send_every: 1
+      - lambda: if (x>6.9) { return 6.9; } else {if (x<0) {return 0;} else {return x;} }
+    unit_of_measurement: bar
+    update_interval: ${interval_update_court}   
+
+  # pression eau retour cuve apres filtre
+  - platform: ads1115
+    multiplexer: 'A2_GND'
+    gain: 6.144 
+    name: "${friendly_name} Pression Aval Cuve"
+    id: "EspVsArrosagePressionAvalCuve"
+    device_class: pressure
+    state_class: "measurement"
+    icon: "mdi:gauge"
+    accuracy_decimals: 1
+    filters:
+      - calibrate_linear:
+            - 0.5 -> 0 
+            - 4.5 -> 6.9
+      - sliding_window_moving_average:
+          window_size: 5
+          send_every: 1
+      - lambda: if (x>6.9) { return 6.9; } else {if (x<0) {return 0;} else {return x;} }
+    unit_of_measurement: bar
+    update_interval: ${interval_update_court}   
+
+
+#DEBIMETRE
+# 2x compteur eau 27pulse = 1 litre modele : YF-DN40 G1-1/2 DN40 5-150L/min
+
+
+#Compteur eau arrosage
+  - platform: pulse_counter
+    id: EspVsArrosageNbpulseArrosage
+    pin: 32
+    name: "${friendly_name} Nb Pulse Arrosage"    
+    update_interval: ${interval_update_normal}
+    accuracy_decimals: 1
+    icon: mdi:water
+    filters:
+      - lambda: return x;
+    on_value:
+      - sensor.template.publish:
+          id: EspVsArrosageDebitM3HeureArrosage
+          state: !lambda 'return ((((x / 27) *60) / 1000));' #litre par minute * 60 minutes(1heure) / 1000 pour compter en m3
+      - sensor.template.publish:
+          id: EspVsArrosageLitreArrosage
+          state: !lambda 'return (x / 27);'# comptage nb litre => a associer avec un ou des utility meter
+
+  - platform: template
+    name: "${friendly_name} Debit M3 Heure Arrosage" 
+    id: EspVsArrosageDebitM3HeureArrosage
+    accuracy_decimals: 2
+    icon: mdi:water
+    unit_of_measurement: "m3/hr"
+    device_class: water
+    state_class: measurement
+
+  - platform: template
+    name: "${friendly_name} Litre Arrosage" 
+    id: EspVsArrosageLitreArrosage
+    accuracy_decimals: 1
+    icon: mdi:water
+    unit_of_measurement: "L"
+    device_class: water
+    state_class: measurement
+
+#Compteur eau alimentation cuve
+  - platform: pulse_counter
+    id: EspVsArrosageNbpulseCuve
+    pin: 33
+    name: "${friendly_name} Nb Pulse Cuve"    
+    update_interval: ${interval_update_normal}
+    accuracy_decimals: 1
+    icon: mdi:water
+    filters:
+      - lambda: return x;
+    on_value:
+      - sensor.template.publish:
+          id: EspVsArrosageDebitM3HeureCuve
+          state: !lambda 'return ((((x / 27) *60) / 1000));' #litre par minute * 60 minutes(1heure) / 1000 pour compter en m3
+      - sensor.template.publish:
+          id: EspVsArrosageLitreCuve
+          state: !lambda 'return (x / 27);' # comptage nb litre => a associer avec un ou des utility meter
+
+  - platform: template
+    name: "${friendly_name} Debit M3 Heure Cuve" 
+    id: EspVsArrosageDebitM3HeureCuve
+    accuracy_decimals: 2
+    icon: mdi:water
+    unit_of_measurement: "m3/hr"
+    device_class: water
+    state_class: measurement
+
+  - platform: template
+    name: "${friendly_name} Litre Cuve" 
+    id: EspVsArrosageLitreCuve
+    accuracy_decimals: 1
+    icon: mdi:water
+    unit_of_measurement: "L"
+    device_class: water
+    state_class: measurement
+
+# DIAGNOSTIQUE
+#--------------------------------------
+#wifi
+  - platform: wifi_signal
+    name: "${friendly_name} WiFi Signal"
+    id: EspVsArrosageWifiSignal
+    update_interval: ${interval_update_long}
+
+#--------------------------------------
+#Uptime decomposé       
+  - platform: uptime
+    name: "${friendly_name} Uptime Sensor"
+    id: EspVsArrosageUptimeSensor
+    update_interval: ${interval_update_long}
+    on_raw_value:
+      then:
+        - text_sensor.template.publish:
+            id: uptime_human
+            state: !lambda |-
+              int seconds = round(id(EspVsArrosageUptimeSensor).raw_state);
+              int days = seconds / (24 * 3600);
+              seconds = seconds % (24 * 3600);
+              int hours = seconds / 3600;
+              seconds = seconds % 3600;
+              int minutes = seconds /  60;
+              return (
+                (days ? to_string(days) + "d " : "") +
+                (hours ? to_string(hours) + "h " : "") +
+                (minutes ? to_string(minutes) + "m " : "")
+              ).c_str();
+
+
+#--------------------------------------
+#--------------------------------------
+# VANNES MOTORISEES PARTIE SWITCH
+switch:
+
+
+# VANNE ARRIVEE POMPE DU CANAL 
+- platform: gpio
+  pin:
+    pcf8574: pcf8575_hub
+    number: 4
+    mode:
+      output: true
+    inverted: true
+  interlock: &interlock1 [EspVsArrosageOuvertureVanneCanal, EspVsArrosageFermetureVanneCanal]
+  id: EspVsArrosageOuvertureVanneCanal
+  #name:"${friendly_name} Ouverture Vanne Canal"
+
+- platform: gpio
+  pin:
+    pcf8574: pcf8575_hub
+    number: 5
+    mode:
+      output: true
+    inverted: true
+  interlock: *interlock1
+  id: EspVsArrosageFermetureVanneCanal
+  #name:"${friendly_name} Fermeture Vanne Canal"
+
+
+# VANNE ALIMENTATION CUVE
+- platform: gpio
+  pin:
+    pcf8574: pcf8575_hub
+    number: 2
+    mode:
+      output: true
+    inverted: true
+  interlock: &interlock2 [EspVsArrosageOuvertureVanneAlimCuve, EspVsArrosageFermetureVanneAlimCuve]
+  id: EspVsArrosageOuvertureVanneAlimCuve
+  #name:"${friendly_name} Ouverture Vanne Alim Cuve"
+
+- platform: gpio
+  pin:
+    pcf8574: pcf8575_hub
+    number: 3
+    mode:
+      output: true
+    inverted: true
+  interlock: *interlock2
+  id: EspVsArrosageFermetureVanneAlimCuve
+  #name:"${friendly_name} Fermeture Vanne Alim Cuve"
+
+# VANNE RETOUR CUVE
+- platform: gpio
+  pin:
+    pcf8574: pcf8575_hub
+    number: 0
+    mode:
+      output: true
+    inverted: true
+  interlock: &interlock3 [EspVsArrosageOuvertureVanneRetourCuve, EspVsArrosageFermetureVanneRetourCuve]
+  id: EspVsArrosageOuvertureVanneRetourCuve
+  #name:"${friendly_name} Ouverture Vanne Arrosage"
+
+- platform: gpio
+  pin:
+    pcf8574: pcf8575_hub
+    number: 1
+    mode:
+      output: true
+    inverted: true
+  interlock: *interlock3
+  id: EspVsArrosageFermetureVanneRetourCuve
+  #name:"${friendly_name} Fermeture Vanne Retour Cuve"
+
+
+
+#--------------------------------------
+#--------------------------------------
+# VANNES MOTORISEES PARTIE COVER
+cover:
+
+# VANNE ARRIVEE POMPE DU CANAL   
+- platform: time_based
+  name: "${friendly_name} Vanne Canal"
+  id: EspVsArrosageVanneCanal
+  device_class: door
+  open_action:
+    - switch.turn_on: EspVsArrosageOuvertureVanneCanal
+  open_duration: ${valve_duration}
+  close_action:
+    - switch.turn_on: EspVsArrosageFermetureVanneCanal
+  close_duration: ${valve_duration}
+  stop_action:
+    - switch.turn_off: EspVsArrosageOuvertureVanneCanal
+    - switch.turn_off: EspVsArrosageFermetureVanneCanal
+
+# VANNE REMPLISSAGE CUVE 
+- platform: time_based
+  name: "${friendly_name} Vanne Alim Cuve"
+  id: EspVsArrosageVanneAlimCuve
+  device_class: door
+  open_action:
+    - switch.turn_on: EspVsArrosageOuvertureVanneAlimCuve
+  open_duration: ${valve_duration}
+  close_action:
+    - switch.turn_on: EspVsArrosageFermetureVanneAlimCuve
+  close_duration: ${valve_duration}
+  stop_action:
+    - switch.turn_off: EspVsArrosageOuvertureVanneAlimCuve
+    - switch.turn_off: EspVsArrosageFermetureVanneAlimCuve
+
+# VANNE ARROSAGE
+- platform: time_based
+  name: "${friendly_name} Vanne Retour Cuve"
+  id: EspVsArrosageVanneRetourCuve
+  device_class: door
+  open_action:
+    - switch.turn_on: EspVsArrosageOuvertureVanneRetourCuve
+  open_duration: ${valve_duration}
+  close_action:
+    - switch.turn_on: EspVsArrosageFermetureVanneRetourCuve
+  close_duration: ${valve_duration}
+  stop_action:
+    - switch.turn_off: EspVsArrosageOuvertureVanneRetourCuve
+    - switch.turn_off: EspVsArrosageFermetureVanneRetourCuve

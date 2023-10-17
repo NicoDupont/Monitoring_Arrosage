@@ -1,0 +1,11 @@
+BME280 6 pin version :
+SDO => GND : 0x76 (configuration par defaut)
+SDO => VCC : 0x77 
+
+PCF8575 :  0x21 ou 0x20
+
+ADS1115 :
+ADDR => GND : 0x48
+ADDR => VDD : 0x49
+ADDR => SDA : 0x4A
+ADDR => DCL : 0x4B

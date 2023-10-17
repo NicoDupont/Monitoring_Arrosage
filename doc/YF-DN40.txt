@@ -1,0 +1,16 @@
+SPECIFICATIONS
+Thread size: Male 1 1/2”
+Size:L  92x OD46  X1.5"
+Colour: Black colour 
+Flow rate: 5~200L/min
+Flow Pulse:  F(Hz)=(0.45xQ) +/-3%    Q=L/min
+1L water= 27Pulse
+Max. Working Current: 15mA (DC5 V)
+Min. Working Voltage: DC 4.5V
+Working Voltage: DC 5V~24V
+Load Capacity: =10 mA (DC 5 V)
+Operating  Working  Temperature : 
+-25 Degree centigrade to +80 Degree centigrade
+Liquid Temperature: 85
+Accuracy: 3~5%
+Working environment: water, liquid,  light oil etc
