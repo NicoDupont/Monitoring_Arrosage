@@ -33,7 +33,7 @@ Les données remontent dans home-assistant via esphome.
 
 ### Cablage :
 
-![links](https://github.com/NicoDupont/Monitoring_Arrosage/blob/main/doc/shema.png)
+![links](https://github.com/NicoDupont/Monitoring_Arrosage/blob/main/doc/fritzing.png)
 
 ### Montage :
 
