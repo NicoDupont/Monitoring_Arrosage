@@ -1,5 +1,7 @@
 ## Monitoring du circuit d'eau d'arrosage
 
+# Montage réalisé sur une protoboard. un pcb dédié sera réalisé
+
 Montage à base d'esp32 utilisé principalement pour monitorer le circuit d'arrosage.  
 
 - pression
